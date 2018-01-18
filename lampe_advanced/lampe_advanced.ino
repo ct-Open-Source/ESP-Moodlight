@@ -1,22 +1,31 @@
 #include <Basecamp.hpp>
+Basecamp iot;
+
 #include <NeoPixelBus.h>
 
-#define RGBW_PIN            16
-#define RGBW_PIXELS      270
-#define WWA_PIN            17
+#define RGBW_PIN        16
+#define RGBW_PIXELS     270
+
+#define WWA_PIN         17
 #define WWA_PIXELS      315
-NeoPixelBus<NeoGrbwFeature, NeoEsp32BitBangWs2813Method> rgbwstrip(RGBW_PIXELS, RGBW_PIN);
-NeoPixelBus<NeoRgbFeature, NeoEsp32BitBangWs2813Method> wwastrip(WWA_PIXELS, WWA_PIN);
-Basecamp iot;
+
+#define PIXEL_PER_ROW   45
+
+NeoPixelBus<NeoGrbwFeature, NeoWs2813Method> rgbwstrip(RGBW_PIXELS, RGBW_PIN);
+NeoPixelBus<NeoRgbFeature, NeoWs2813Method> wwastrip(WWA_PIXELS, WWA_PIN);
+
 String RGBWTopic;
 String WWATopic;
 
 void setup() {
   iot.begin();
+
+  RGBWTopic = "cmnd/" + iot.hostname + "/rgbw";
+  WWATopic = "cmnd/" + iot.hostname + "/wwa";
+
   iot.mqtt.onMessage(onMqttMessage);
   iot.mqtt.onConnect(onMqttConnect);
-  RGBWTopic = "stat/" + iot.hostname + "/rgbw";
-  WWATopic = "stat/" + iot.hostname + "/wwa";
+
   rgbwstrip.Begin();
   rgbwstrip.Show();
   wwastrip.Begin();
@@ -25,25 +34,28 @@ void setup() {
 }
 
 void onMqttConnect(bool sessionPresent) {
-  iot.mqtt.subscribe(RGBWTopic.c_str(), 0);
-  iot.mqtt.subscribe(WWATopic.c_str(), 0);
+  iot.mqtt.subscribe(RGBWTopic.c_str(), 2);
+  iot.mqtt.subscribe(WWATopic.c_str(), 2);
 }
 
 void onMqttMessage(char* topic, char* payload,
                    AsyncMqttClientMessageProperties properties,
                    size_t len, size_t index, size_t total) {
-  if (topic == RGBWTopic.c_str()) {
-    int R = getCsvIntAtIndex(payload, 0);
-    int G = getCsvIntAtIndex(payload, 1);
-    int B = getCsvIntAtIndex(payload, 2);
-    int W = getCsvIntAtIndex(payload, 3);
+
+  Serial.println(topic);
+  if (strcmp(topic, RGBWTopic.c_str()) == 0) {
+    Serial.println("rgb");
+    int R = getIntFromHex(payload, 0);
+    int G = getIntFromHex(payload, 1);
+    int B = getIntFromHex(payload, 2);
+    int W = getIntFromHex(payload, 3);
     setRGBW(R, G, B, W);
 
-  } else if (topic == WWATopic.c_str()) {
-
-    int WW = getCsvIntAtIndex(payload, 0);
-    int CW = getCsvIntAtIndex(payload, 1);
-    int A = getCsvIntAtIndex(payload, 2);
+  } else if (strcmp(topic, WWATopic.c_str()) == 0) {
+    Serial.println("wwa");
+    int WW = getIntFromHex(payload, 0);
+    int CW = getIntFromHex(payload, 1);
+    int A = getIntFromHex(payload, 2);
     setWWA(WW, CW, A);
   }
 }
@@ -60,7 +72,7 @@ void setRGBW(int R, int G, int B, int W) {
 
 void setWWA(int WW, int CW, int A) {
   for (int i = 0; i < WWA_PIXELS; i++) {
-    rgbwstrip.SetPixelColor(i, RgbwColor(WW, CW, A));
+    wwastrip.SetPixelColor(i, RgbColor(WW, CW, A));
   }
   delay(10);
   portDISABLE_INTERRUPTS();
@@ -68,20 +80,35 @@ void setWWA(int WW, int CW, int A) {
   portENABLE_INTERRUPTS();
 }
 
-int getCsvIntAtIndex(String csv, int index) {
-  int startChar = 0, valueNo = 0;
-  for (int i = 0; i <= csv.length() - 1; i++) {
-    if (csv[i] == ',')
-      if (valueNo == index) {
-        return csv.substring(startChar, i).toInt();
-      } else {
-        startChar = i + 1;
-        valueNo++;
-      }
+int getIntFromHex(char* hexC, int index) {
+  String hexvalue = hexC;
+  hexvalue.toLowerCase();
+
+  if (hexvalue.charAt(0) == '#') {
+    hexvalue.remove(0, 1);
   }
-  if (startChar < csv.length() - 1)
-    return csv.substring(startChar, csv.length()).toInt();
-  return 0;
+
+  int substring_start = index * 2;
+  int substring_end = substring_start + 2;
+  int hexlength = hexvalue.length();
+
+  if (hexlength % 2 != 0 || hexlength < substring_end ) {
+
+    return 0;
+  }
+
+
+  String singular_hexvalue = hexvalue.substring(substring_start, substring_end);
+  for (int i = 0; i < singular_hexvalue.length(); i++) {
+    if (isxdigit(singular_hexvalue.charAt(i)) == 0) {
+      return 0;
+    }
+  }
+
+  int decvalue = (int) strtol(singular_hexvalue.c_str(), 0, 16);
+
+  return decvalue;
 }
+
 
 void loop() {}

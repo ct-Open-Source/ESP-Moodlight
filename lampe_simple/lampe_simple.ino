@@ -3,8 +3,8 @@
 
 #define RGBW_PIN            16
 #define RGBW_PIXELS      270
-NeoPixelBus<NeoGrbwFeature, NeoEsp32BitBangWs2813Method> 
-  rgbwstrip(RGBW_PIXELS, RGBW_PIN);
+NeoPixelBus<NeoGrbwFeature, NeoEsp32BitBangWs2813Method>
+rgbwstrip(RGBW_PIXELS, RGBW_PIN);
 Basecamp iot;
 
 void setup() {
@@ -19,11 +19,13 @@ void setup() {
 
 void onMqttConnect(bool sessionPresent) {
   iot.mqtt.subscribe("cmnd/moodlight/setRGBW", 0);
+
 }
 
 void onMqttMessage(char* topic, char* payload,
                    AsyncMqttClientMessageProperties properties,
                    size_t len, size_t index, size_t total) {
+
   int R = getCsvIntAtIndex(payload, 0);
   int G = getCsvIntAtIndex(payload, 1);
   int B = getCsvIntAtIndex(payload, 2);
